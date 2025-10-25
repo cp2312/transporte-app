@@ -1,5 +1,5 @@
 // ============================================
-// APP.JS - APLICACIÓN DE TRANSPORTE PÚBLICO
+// APP.JS - VERSIÓN MEJORADA CON QR REAL
 // ============================================
 
 // Variables globales
@@ -10,98 +10,127 @@ let userBalance = 10000;
 let tripHistory = [];
 let currentBusData = null;
 let selectedRechargeAmount = 0;
+let html5QrCode = null;
+let isScanning = false;
 
 // ============================================
 // INICIALIZACIÓN
 // ============================================
 
-// Inicializar la aplicación cuando cargue la página
 function init() {
     updateBalance();
     loadHistory();
+    generateDemoQRCodes();
 }
 
 // ============================================
-// NAVEGACIÓN ENTRE PANTALLAS
+// NAVEGACIÓN
 // ============================================
 
 function showScreen(screenId) {
-    // Ocultar todas las pantallas
     document.querySelectorAll('.screen').forEach(screen => {
         screen.classList.remove('active');
     });
     
-    // Mostrar la pantalla seleccionada
     document.getElementById(screenId).classList.add('active');
     
-    // Inicializar el mapa si se abre la pantalla del mapa
     if (screenId === 'map-screen' && !map) {
-        initMap();
+        setTimeout(initMap, 100);
     }
     
-    // Actualizar historial si se abre esa pantalla
+    if (screenId === 'scanner-screen') {
+        startQRScanner();
+    } else {
+        stopQRScanner();
+    }
+    
     if (screenId === 'history-screen') {
         displayHistory();
     }
 }
 
 // ============================================
-// FUNCIONES DEL MAPA
+// MAPA CON RUTAS QUE SIGUEN CALLES
 // ============================================
 
-// Inicializar el mapa de Leaflet
 function initMap() {
-    // Crear mapa centrado en Tunja, Boyacá
-    map = L.map('map').setView([5.5401, -73.3678], 13);
+    map = L.map('map').setView([5.5401, -73.3678], 14);
     
-    // Agregar capa de OpenStreetMap
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors'
+        attribution: '© OpenStreetMap'
     }).addTo(map);
     
-    // Dibujar rutas y buses
-    drawRoutes();
+    drawRoutesWithStreets();
     drawBuses();
-    
-    // Iniciar simulación de movimiento
     startBusSimulation();
 }
 
-// Dibujar las rutas en el mapa
-function drawRoutes() {
+function drawRoutesWithStreets() {
     routes.forEach(route => {
-        const polyline = L.polyline(route.coordinates, {
-            color: route.color,
-            weight: 4,
-            opacity: 0.7
+        // Usar Leaflet Routing Machine para seguir calles
+        const waypoints = route.waypoints.map(coord => L.latLng(coord[0], coord[1]));
+        
+        const routingControl = L.Routing.control({
+            waypoints: waypoints,
+            routeWhileDragging: false,
+            addWaypoints: false,
+            draggableWaypoints: false,
+            fitSelectedRoutes: false,
+            showAlternatives: false,
+            lineOptions: {
+                styles: [{ color: route.color, opacity: 0.8, weight: 5 }]
+            },
+            createMarker: function() { return null; }, // No mostrar marcadores de waypoints
+            router: L.Routing.osrmv1({
+                serviceUrl: 'https://router.project-osrm.org/route/v1'
+            })
         }).addTo(map);
         
-        polyline.bindPopup(`<b>${route.name}</b><br>Tarifa: $${route.fare}`);
+        // Ocultar el panel de instrucciones
+        const container = routingControl.getContainer();
+        if (container) {
+            container.style.display = 'none';
+        }
         
-        routePolylines.push({ id: route.id, polyline });
+        routePolylines.push({ id: route.id, control: routingControl });
     });
 }
 
-// Dibujar los buses en el mapa
 function drawBuses() {
     buses.forEach(bus => {
         const route = routes.find(r => r.id === bus.routeId);
         
-        // Crear marcador personalizado para el bus
+        const busIcon = L.divIcon({
+            className: 'custom-bus-marker',
+            html: `
+                <div style="
+                    background: ${route.color}; 
+                    color: white; 
+                    padding: 8px 14px; 
+                    border-radius: 20px; 
+                    font-weight: bold;
+                    box-shadow: 0 3px 8px rgba(0,0,0,0.3);
+                    border: 2px solid white;
+                    font-size: 13px;
+                ">
+                    🚌 ${bus.number}
+                </div>
+            `,
+            iconSize: [70, 35],
+            iconAnchor: [35, 17]
+        });
+        
         const marker = L.marker([bus.latitude, bus.longitude], {
-            icon: L.divIcon({
-                className: 'bus-marker',
-                html: `<div style="background: ${route.color}; color: white; padding: 5px 10px; border-radius: 20px; font-weight: bold; box-shadow: 0 2px 5px rgba(0,0,0,0.3);">${bus.number}</div>`,
-                iconSize: [60, 30]
-            })
+            icon: busIcon
         }).addTo(map);
         
-        // Agregar popup con información del bus
         marker.bindPopup(`
-            <div style="text-align: center;">
-                <b>Bus ${bus.number}</b><br>
-                ${route.name}<br>
-                <span style="color: ${route.color}; font-weight: bold;">Tarifa: $${route.fare}</span>
+            <div style="text-align: center; min-width: 150px;">
+                <h4 style="margin: 0 0 8px 0; font-size: 1.1em;">Bus ${bus.number}</h4>
+                <p style="margin: 4px 0; color: #666;">${route.name}</p>
+                <p style="margin: 8px 0 0 0; font-weight: bold; color: ${route.color};">
+                    Tarifa: ${route.fare.toLocaleString()}
+                </p>
             </div>
         `);
         
@@ -111,28 +140,30 @@ function drawBuses() {
     updateActiveBusesCount();
 }
 
-// Simular movimiento de buses en tiempo real
 function startBusSimulation() {
     setInterval(() => {
         busMarkers.forEach(({ marker, data }) => {
             const route = routes.find(r => r.id === data.routeId);
             const currentPos = marker.getLatLng();
             
-            // Generar movimiento aleatorio pequeño (simula GPS)
-            const newLat = currentPos.lat + (Math.random() - 0.5) * 0.002;
-            const newLng = currentPos.lng + (Math.random() - 0.5) * 0.002;
+            // Movimiento más realista siguiendo la ruta
+            const waypointIndex = Math.floor(Math.random() * route.waypoints.length);
+            const targetWaypoint = route.waypoints[waypointIndex];
             
-            // Actualizar posición del marcador
+            // Mover hacia el waypoint gradualmente
+            const latDiff = (targetWaypoint[0] - currentPos.lat) * 0.05;
+            const lngDiff = (targetWaypoint[1] - currentPos.lng) * 0.05;
+            
+            const newLat = currentPos.lat + latDiff;
+            const newLng = currentPos.lng + lngDiff;
+            
             marker.setLatLng([newLat, newLng]);
-            
-            // Actualizar datos del bus
             data.latitude = newLat;
             data.longitude = newLng;
         });
-    }, 3000); // Actualizar cada 3 segundos
+    }, 2000);
 }
 
-// Filtrar buses por ruta
 function filterRoute() {
     const selectedRoute = document.getElementById('route-filter').value;
     
@@ -147,7 +178,6 @@ function filterRoute() {
     updateActiveBusesCount();
 }
 
-// Actualizar contador de buses activos
 function updateActiveBusesCount() {
     const selectedRoute = document.getElementById('route-filter')?.value || 'all';
     let count = buses.length;
@@ -163,15 +193,128 @@ function updateActiveBusesCount() {
 }
 
 // ============================================
-// FUNCIONES DE ESCANEO QR
+// SCANNER QR REAL
 // ============================================
 
-// Simular escaneo de código QR
-function simulateScan(busId) {
-    const bus = buses.find(b => b.id === busId);
-    const route = routes.find(r => r.id === bus.routeId);
+function startQRScanner() {
+    if (isScanning) return;
     
-    // Guardar datos del bus seleccionado
+    const config = { 
+        fps: 10,
+        qrbox: { width: 250, height: 250 },
+        aspectRatio: 1.0
+    };
+    
+    html5QrCode = new Html5Qrcode("qr-reader");
+    
+    Html5Qrcode.getCameras().then(cameras => {
+        if (cameras && cameras.length) {
+            const cameraId = cameras[cameras.length - 1].id;
+            
+            html5QrCode.start(
+                cameraId,
+                config,
+                onScanSuccess,
+                onScanFailure
+            ).then(() => {
+                isScanning = true;
+            }).catch(err => {
+                console.error("Error al iniciar cámara:", err);
+                showSuccessModal('⚠️', 'Error de Cámara', 'No se pudo acceder a la cámara. Usa los códigos QR de prueba.');
+            });
+        } else {
+            showSuccessModal('⚠️', 'Sin Cámara', 'No se detectó ninguna cámara. Usa los códigos QR de prueba.');
+        }
+    }).catch(err => {
+        console.error("Error al obtener cámaras:", err);
+        showSuccessModal('⚠️', 'Error', 'No se pudo acceder a la cámara. Asegúrate de dar permisos.');
+    });
+}
+
+function stopQRScanner() {
+    if (html5QrCode && isScanning) {
+        html5QrCode.stop().then(() => {
+            isScanning = false;
+        }).catch(err => {
+            console.error("Error al detener escáner:", err);
+        });
+    }
+}
+
+function onScanSuccess(decodedText, decodedResult) {
+    console.log("QR detectado:", decodedText);
+    
+    // Detener el scanner
+    stopQRScanner();
+    
+    // Procesar el código QR
+    processQRCode(decodedText);
+}
+
+function onScanFailure(error) {
+    // No hacer nada, es normal que falle mientras busca
+}
+
+function processQRCode(qrData) {
+    try {
+        // Intentar parsear como JSON
+        const data = JSON.parse(qrData);
+        
+        if (data.busId) {
+            const bus = buses.find(b => b.id === data.busId);
+            if (bus) {
+                const route = routes.find(r => r.id === bus.routeId);
+                showPaymentScreen(bus, route);
+            } else {
+                showSuccessModal('❌', 'Error', 'Código QR no válido');
+            }
+        }
+    } catch (e) {
+        // Si no es JSON, buscar por ID directo
+        const bus = buses.find(b => b.id === qrData);
+        if (bus) {
+            const route = routes.find(r => r.id === bus.routeId);
+            showPaymentScreen(bus, route);
+        } else {
+            showSuccessModal('❌', 'Error', 'Código QR no reconocido');
+        }
+    }
+}
+
+// Generar códigos QR de prueba
+function generateDemoQRCodes() {
+    const qrBuses = [
+        { id: 'qr-bus-1', busId: 'BUS-001' },
+        { id: 'qr-bus-2', busId: 'BUS-002' },
+        { id: 'qr-bus-3', busId: 'BUS-003' }
+    ];
+    
+    qrBuses.forEach(item => {
+        const canvas = document.getElementById(item.id);
+        if (canvas && typeof QRCode !== 'undefined') {
+            new QRCode(canvas, {
+                text: JSON.stringify({ busId: item.busId }),
+                width: 180,
+                height: 180,
+                colorDark: "#000000",
+                colorLight: "#ffffff",
+                correctLevel: QRCode.CorrectLevel.H
+            });
+            
+            // Hacer clickeable para simular escaneo
+            canvas.parentElement.style.cursor = 'pointer';
+            canvas.parentElement.onclick = () => {
+                processQRCode(JSON.stringify({ busId: item.busId }));
+            };
+        }
+    });
+}
+
+// ============================================
+// PAGO
+// ============================================
+
+function showPaymentScreen(bus, route) {
     currentBusData = {
         busId: bus.id,
         busNumber: bus.number,
@@ -179,28 +322,18 @@ function simulateScan(busId) {
         fare: route.fare
     };
     
-    // Llenar información en la pantalla de pago
     document.getElementById('payment-bus-number').textContent = bus.number;
     document.getElementById('payment-route').textContent = route.name;
-    document.getElementById('payment-fare').textContent = `$${route.fare} COP`;
-    document.getElementById('payment-balance').textContent = `$${userBalance.toLocaleString()}`;
+    document.getElementById('payment-fare').textContent = `${route.fare.toLocaleString()} COP`;
+    document.getElementById('payment-balance').textContent = `${userBalance.toLocaleString()}`;
     
-    // Navegar a pantalla de pago
     showScreen('payment-screen');
 }
 
-// ============================================
-// FUNCIONES DE PAGO
-// ============================================
-
-// Procesar el pago del viaje
 function processPayment() {
-    // Verificar si hay saldo suficiente
     if (userBalance >= currentBusData.fare) {
-        // Descontar del saldo
         userBalance -= currentBusData.fare;
         
-        // Crear registro del viaje
         const trip = {
             date: new Date().toLocaleString('es-CO', {
                 year: 'numeric',
@@ -214,147 +347,107 @@ function processPayment() {
             amount: currentBusData.fare
         };
         
-        // Agregar al historial
         tripHistory.unshift(trip);
-        
-        // Guardar en localStorage
         saveHistory();
-        
-        // Actualizar saldo en pantalla
         updateBalance();
         
-        // Mostrar mensaje de éxito
-        showSuccessModal(
-            '¡Pago Exitoso!', 
-            `Has pagado $${currentBusData.fare.toLocaleString()} por tu viaje en el bus ${currentBusData.busNumber}`
-        );
+        showSuccessModal('✅', '¡Pago Exitoso!', `Has pagado ${currentBusData.fare.toLocaleString()} por tu viaje en el bus ${currentBusData.busNumber}`);
         
-        // Volver a home después de 2 segundos
         setTimeout(() => {
             closeModal();
             showScreen('home-screen');
-        }, 2000);
+        }, 2500);
     } else {
-        // Saldo insuficiente
-        showSuccessModal(
-            'Saldo Insuficiente', 
-            'Por favor recarga tu saldo para continuar'
-        );
+        showSuccessModal('⚠️', 'Saldo Insuficiente', 'Por favor recarga tu saldo para continuar');
     }
 }
 
 // ============================================
-// FUNCIONES DE RECARGA
+// RECARGA
 // ============================================
 
-// Seleccionar monto de recarga
 function selectAmount(amount) {
     selectedRechargeAmount = amount;
     
-    // Resetear estilos de todos los botones
     document.querySelectorAll('.amount-btn').forEach(btn => {
-        btn.style.background = 'white';
-        btn.style.color = '#667eea';
+        btn.classList.remove('selected');
     });
     
-    // Resaltar botón seleccionado
-    event.target.style.background = '#667eea';
-    event.target.style.color = 'white';
+    event.target.classList.add('selected');
 }
 
-// Procesar recarga de saldo
 function rechargeBalance() {
     let amount = selectedRechargeAmount;
     
-    // Verificar si hay monto personalizado
     const customAmount = document.getElementById('custom-amount').value;
     if (customAmount && parseInt(customAmount) > 0) {
         amount = parseInt(customAmount);
     }
     
-    // Validar que haya un monto seleccionado
     if (amount > 0) {
-        // Agregar saldo
         userBalance += amount;
-        
-        // Actualizar pantalla
         updateBalance();
-        
-        // Guardar en localStorage
         saveHistory();
         
-        // Mostrar mensaje de éxito
-        showSuccessModal(
-            '¡Recarga Exitosa!', 
-            `Se han agregado $${amount.toLocaleString()} a tu saldo`
-        );
+        showSuccessModal('✅', '¡Recarga Exitosa!', `Se han agregado ${amount.toLocaleString()} a tu saldo`);
         
-        // Limpiar campos
         document.getElementById('custom-amount').value = '';
         selectedRechargeAmount = 0;
         
         document.querySelectorAll('.amount-btn').forEach(btn => {
-            btn.style.background = 'white';
-            btn.style.color = '#667eea';
+            btn.classList.remove('selected');
         });
         
-        // Volver a home después de 2 segundos
         setTimeout(() => {
             closeModal();
             showScreen('home-screen');
-        }, 2000);
+        }, 2500);
     } else {
-        showSuccessModal('Error', 'Por favor selecciona un monto válido');
+        showSuccessModal('❌', 'Error', 'Por favor selecciona un monto válido');
     }
 }
 
 // ============================================
-// FUNCIONES DE SALDO E HISTORIAL
+// SALDO E HISTORIAL
 // ============================================
 
-// Actualizar saldo en todas las pantallas
 function updateBalance() {
-    const balanceElement = document.getElementById('user-balance');
-    if (balanceElement) {
-        balanceElement.textContent = `$${userBalance.toLocaleString()} COP`;
-    }
+    const balanceElements = document.querySelectorAll('#user-balance');
+    balanceElements.forEach(el => {
+        el.textContent = `${userBalance.toLocaleString()} COP`;
+    });
 }
 
-// Mostrar historial de viajes
 function displayHistory() {
     const historyList = document.getElementById('history-list');
     
-    // Si no hay viajes
     if (tripHistory.length === 0) {
         historyList.innerHTML = `
-            <div style="background: white; padding: 40px; border-radius: 15px; text-align: center; box-shadow: 0 5px 15px rgba(0,0,0,0.1);">
-                <span style="font-size: 4em;">🚌</span>
-                <p style="margin-top: 20px; color: #666;">No hay viajes registrados aún</p>
-                <p style="color: #999; font-size: 0.9em;">Escanea un código QR para realizar tu primer viaje</p>
+            <div style="background: white; padding: 60px 40px; border-radius: 12px; text-align: center; border: 1px solid #e0e0e0;">
+                <span style="font-size: 5em; opacity: 0.3;">🚌</span>
+                <h3 style="margin-top: 20px; color: #000;">No hay viajes registrados</h3>
+                <p style="color: #666; margin-top: 10px;">Escanea un código QR para realizar tu primer viaje</p>
             </div>
         `;
         return;
     }
     
-    // Generar HTML para cada viaje
     historyList.innerHTML = tripHistory.map(trip => `
         <div class="history-item">
             <div class="history-info">
                 <h4>Bus ${trip.bus} - ${trip.route}</h4>
                 <p>${trip.date}</p>
             </div>
-            <div class="history-amount">-$${trip.amount.toLocaleString()}</div>
+            <div class="history-amount">-${trip.amount.toLocaleString()}</div>
         </div>
     `).join('');
 }
 
-// Guardar datos en localStorage
 function saveHistory() {
     localStorage.setItem('tripHistory', JSON.stringify(tripHistory));
     localStorage.setItem('userBalance', userBalance.toString());
 }
 
-// Cargar datos desde localStorage
 function loadHistory() {
     const savedHistory = localStorage.getItem('tripHistory');
     const savedBalance = localStorage.getItem('userBalance');
@@ -375,24 +468,22 @@ function loadHistory() {
 }
 
 // ============================================
-// FUNCIONES DE MODAL
+// MODAL
 // ============================================
 
-// Mostrar modal con mensaje
-function showSuccessModal(title, message) {
+function showSuccessModal(icon, title, message) {
+    document.getElementById('modal-icon').textContent = icon;
     document.getElementById('success-title').textContent = title;
     document.getElementById('success-message').textContent = message;
     document.getElementById('success-modal').classList.add('active');
 }
 
-// Cerrar modal
 function closeModal() {
     document.getElementById('success-modal').classList.remove('active');
 }
 
 // ============================================
-// INICIAR APLICACIÓN
+// INICIAR
 // ============================================
 
-// Ejecutar cuando el DOM esté listo
 window.addEventListener('DOMContentLoaded', init);

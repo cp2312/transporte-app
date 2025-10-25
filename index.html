@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>TransMiApp - Sistema de Transporte</title>
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -16,7 +17,7 @@
         </header>
         
         <div class="balance-card">
-            <p>Tu Saldo</p>
+            <p>Tu Saldo Disponible</p>
             <h2 id="user-balance">$10,000 COP</h2>
         </div>
         
@@ -43,7 +44,7 @@
     <!-- Pantalla del Mapa -->
     <div id="map-screen" class="screen">
         <div class="screen-header">
-            <button onclick="showScreen('home-screen')">← Volver</button>
+            <button onclick="showScreen('home-screen')" class="back-btn">← Volver</button>
             <h2>Buses en Tiempo Real</h2>
         </div>
         
@@ -66,28 +67,37 @@
     <!-- Pantalla del Scanner QR -->
     <div id="scanner-screen" class="screen">
         <div class="screen-header">
-            <button onclick="showScreen('home-screen')">← Volver</button>
+            <button onclick="showScreen('home-screen')" class="back-btn">← Volver</button>
             <h2>Escanear Código QR</h2>
         </div>
         
         <div class="scanner-container">
-            <div class="scanner-frame">
-                <div class="scanner-line"></div>
+            <div id="qr-reader"></div>
+            
+            <div class="scanner-instructions">
+                <p>📱 Permite acceso a la cámara para escanear</p>
                 <p>Apunta al código QR del bus</p>
             </div>
             
-            <!-- Simulación: Botones para escanear buses -->
-            <div class="demo-buses">
-                <p class="demo-label">Demo: Selecciona un bus para simular escaneo</p>
-                <button class="demo-bus-btn" onclick="simulateScan('BUS-001')">
-                    Bus 101 - Ruta Centro
-                </button>
-                <button class="demo-bus-btn" onclick="simulateScan('BUS-002')">
-                    Bus 205 - Ruta Norte
-                </button>
-                <button class="demo-bus-btn" onclick="simulateScan('BUS-003')">
-                    Bus 308 - Ruta Sur
-                </button>
+            <!-- Para pruebas: Generar QR de prueba -->
+            <div class="demo-section">
+                <h3>🧪 Modo Demo</h3>
+                <p>Escanea estos códigos QR de prueba:</p>
+                
+                <div class="qr-codes-grid">
+                    <div class="qr-code-item">
+                        <canvas id="qr-bus-1"></canvas>
+                        <p>Bus 101 - Centro</p>
+                    </div>
+                    <div class="qr-code-item">
+                        <canvas id="qr-bus-2"></canvas>
+                        <p>Bus 205 - Norte</p>
+                    </div>
+                    <div class="qr-code-item">
+                        <canvas id="qr-bus-3"></canvas>
+                        <p>Bus 308 - Sur</p>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -95,16 +105,25 @@
     <!-- Pantalla de Pago -->
     <div id="payment-screen" class="screen">
         <div class="screen-header">
-            <button onclick="showScreen('scanner-screen')">← Volver</button>
+            <button onclick="showScreen('scanner-screen')" class="back-btn">← Volver</button>
             <h2>Confirmar Pago</h2>
         </div>
         
         <div class="payment-container">
             <div class="bus-details">
                 <h3>Información del Viaje</h3>
-                <p><strong>Bus:</strong> <span id="payment-bus-number"></span></p>
-                <p><strong>Ruta:</strong> <span id="payment-route"></span></p>
-                <p><strong>Tarifa:</strong> <span id="payment-fare"></span></p>
+                <div class="detail-row">
+                    <span>Bus:</span>
+                    <strong id="payment-bus-number"></strong>
+                </div>
+                <div class="detail-row">
+                    <span>Ruta:</span>
+                    <strong id="payment-route"></strong>
+                </div>
+                <div class="detail-row">
+                    <span>Tarifa:</span>
+                    <strong id="payment-fare" class="fare-amount"></strong>
+                </div>
             </div>
             
             <div class="balance-info">
@@ -113,7 +132,7 @@
             </div>
             
             <button class="btn-primary" onclick="processPayment()">
-                Pagar Ahora
+                Confirmar Pago
             </button>
         </div>
     </div>
@@ -121,7 +140,7 @@
     <!-- Pantalla de Historial -->
     <div id="history-screen" class="screen">
         <div class="screen-header">
-            <button onclick="showScreen('home-screen')">← Volver</button>
+            <button onclick="showScreen('home-screen')" class="back-btn">← Volver</button>
             <h2>Historial de Viajes</h2>
         </div>
         
@@ -133,7 +152,7 @@
     <!-- Pantalla de Recarga -->
     <div id="recharge-screen" class="screen">
         <div class="screen-header">
-            <button onclick="showScreen('home-screen')">← Volver</button>
+            <button onclick="showScreen('home-screen')" class="back-btn">← Volver</button>
             <h2>Recargar Saldo</h2>
         </div>
         
@@ -151,22 +170,26 @@
             </div>
             
             <button class="btn-primary" onclick="rechargeBalance()">
-                Recargar
+                Recargar Saldo
             </button>
         </div>
     </div>
 
-    <!-- Modal de Éxito -->
+    <!-- Modal de Éxito/Error -->
     <div id="success-modal" class="modal">
         <div class="modal-content">
-            <span class="success-icon">✅</span>
+            <span class="success-icon" id="modal-icon">✅</span>
             <h2 id="success-title">Operación Exitosa</h2>
             <p id="success-message"></p>
-            <button onclick="closeModal()">Aceptar</button>
+            <button onclick="closeModal()" class="btn-secondary">Aceptar</button>
         </div>
     </div>
 
+    <!-- Scripts -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/qrcodejs@1.0.0/qrcode.min.js"></script>
     <script src="data.js"></script>
     <script src="app.js"></script>
 </body>
