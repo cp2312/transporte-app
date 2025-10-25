@@ -1,0 +1,173 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>TransMiApp - Sistema de Transporte</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <!-- Pantalla de Inicio -->
+    <div id="home-screen" class="screen active">
+        <header>
+            <h1>🚌 TransMiApp</h1>
+            <p>Sistema de Transporte Público</p>
+        </header>
+        
+        <div class="balance-card">
+            <p>Tu Saldo</p>
+            <h2 id="user-balance">$10,000 COP</h2>
+        </div>
+        
+        <div class="menu-grid">
+            <button class="menu-btn" onclick="showScreen('map-screen')">
+                <span class="icon">🗺️</span>
+                <span>Ver Mapa</span>
+            </button>
+            <button class="menu-btn" onclick="showScreen('scanner-screen')">
+                <span class="icon">📷</span>
+                <span>Escanear QR</span>
+            </button>
+            <button class="menu-btn" onclick="showScreen('history-screen')">
+                <span class="icon">📋</span>
+                <span>Historial</span>
+            </button>
+            <button class="menu-btn" onclick="showScreen('recharge-screen')">
+                <span class="icon">💳</span>
+                <span>Recargar</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Pantalla del Mapa -->
+    <div id="map-screen" class="screen">
+        <div class="screen-header">
+            <button onclick="showScreen('home-screen')">← Volver</button>
+            <h2>Buses en Tiempo Real</h2>
+        </div>
+        
+        <div class="map-controls">
+            <select id="route-filter" onchange="filterRoute()">
+                <option value="all">Todas las Rutas</option>
+                <option value="ruta-1">Ruta 1 - Centro</option>
+                <option value="ruta-2">Ruta 2 - Norte</option>
+                <option value="ruta-3">Ruta 3 - Sur</option>
+            </select>
+        </div>
+        
+        <div id="map"></div>
+        
+        <div class="bus-info-panel">
+            <h3>Buses Activos: <span id="active-buses">0</span></h3>
+        </div>
+    </div>
+
+    <!-- Pantalla del Scanner QR -->
+    <div id="scanner-screen" class="screen">
+        <div class="screen-header">
+            <button onclick="showScreen('home-screen')">← Volver</button>
+            <h2>Escanear Código QR</h2>
+        </div>
+        
+        <div class="scanner-container">
+            <div class="scanner-frame">
+                <div class="scanner-line"></div>
+                <p>Apunta al código QR del bus</p>
+            </div>
+            
+            <!-- Simulación: Botones para escanear buses -->
+            <div class="demo-buses">
+                <p class="demo-label">Demo: Selecciona un bus para simular escaneo</p>
+                <button class="demo-bus-btn" onclick="simulateScan('BUS-001')">
+                    Bus 101 - Ruta Centro
+                </button>
+                <button class="demo-bus-btn" onclick="simulateScan('BUS-002')">
+                    Bus 205 - Ruta Norte
+                </button>
+                <button class="demo-bus-btn" onclick="simulateScan('BUS-003')">
+                    Bus 308 - Ruta Sur
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Pantalla de Pago -->
+    <div id="payment-screen" class="screen">
+        <div class="screen-header">
+            <button onclick="showScreen('scanner-screen')">← Volver</button>
+            <h2>Confirmar Pago</h2>
+        </div>
+        
+        <div class="payment-container">
+            <div class="bus-details">
+                <h3>Información del Viaje</h3>
+                <p><strong>Bus:</strong> <span id="payment-bus-number"></span></p>
+                <p><strong>Ruta:</strong> <span id="payment-route"></span></p>
+                <p><strong>Tarifa:</strong> <span id="payment-fare"></span></p>
+            </div>
+            
+            <div class="balance-info">
+                <p>Tu saldo actual</p>
+                <h2 id="payment-balance">$10,000</h2>
+            </div>
+            
+            <button class="btn-primary" onclick="processPayment()">
+                Pagar Ahora
+            </button>
+        </div>
+    </div>
+
+    <!-- Pantalla de Historial -->
+    <div id="history-screen" class="screen">
+        <div class="screen-header">
+            <button onclick="showScreen('home-screen')">← Volver</button>
+            <h2>Historial de Viajes</h2>
+        </div>
+        
+        <div id="history-list" class="history-list">
+            <!-- Se llenará dinámicamente -->
+        </div>
+    </div>
+
+    <!-- Pantalla de Recarga -->
+    <div id="recharge-screen" class="screen">
+        <div class="screen-header">
+            <button onclick="showScreen('home-screen')">← Volver</button>
+            <h2>Recargar Saldo</h2>
+        </div>
+        
+        <div class="recharge-container">
+            <div class="amount-buttons">
+                <button class="amount-btn" onclick="selectAmount(5000)">$5,000</button>
+                <button class="amount-btn" onclick="selectAmount(10000)">$10,000</button>
+                <button class="amount-btn" onclick="selectAmount(20000)">$20,000</button>
+                <button class="amount-btn" onclick="selectAmount(50000)">$50,000</button>
+            </div>
+            
+            <div class="custom-amount">
+                <label>Monto personalizado:</label>
+                <input type="number" id="custom-amount" placeholder="Ingresa el monto">
+            </div>
+            
+            <button class="btn-primary" onclick="rechargeBalance()">
+                Recargar
+            </button>
+        </div>
+    </div>
+
+    <!-- Modal de Éxito -->
+    <div id="success-modal" class="modal">
+        <div class="modal-content">
+            <span class="success-icon">✅</span>
+            <h2 id="success-title">Operación Exitosa</h2>
+            <p id="success-message"></p>
+            <button onclick="closeModal()">Aceptar</button>
+        </div>
+    </div>
+
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <script src="data.js"></script>
+    <script src="app.js"></script>
+</body>
+</html>
