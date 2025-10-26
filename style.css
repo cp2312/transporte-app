@@ -288,12 +288,18 @@ header p {
     border: 1px solid var(--border);
 }
 
-.qr-code-item canvas {
-    width: 100% !important;
-    height: auto !important;
-    max-width: 180px;
+.qr-code-item div {
+    width: 180px !important;
+    height: 180px !important;
     margin: 0 auto;
-    display: block;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.qr-code-item img {
+    width: 100% !important;
+    height: 100% !important;
 }
 
 .qr-code-item p {
