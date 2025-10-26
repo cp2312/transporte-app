@@ -7,14 +7,22 @@
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
     <link rel="stylesheet" href="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.css" />
     <link rel="stylesheet" href="style.css">
+
+  
 </head>
 <body>
     <!-- Pantalla de Inicio -->
     <div id="home-screen" class="screen active">
-        <header>
-            <h1>🚌 TransMiApp</h1>
-            <p>Sistema de Transporte Público</p>
-        </header>
+      <header class="main-header">
+  <div class="bus-animation">
+    <div class="bus">🚌</div>
+  </div>
+  <div class="header-text">
+    <h1>App de Transporte</h1>
+    <p>Sistema de Transporte Público</p>
+  </div>
+</header>
+
         
         <div class="balance-card">
             <p>Tu Saldo Disponible</p>
@@ -75,13 +83,13 @@
             <div id="qr-reader"></div>
             
             <div class="scanner-instructions">
-                <p>📱 Permite acceso a la cámara para escanear</p>
+                <p>Permite acceso a la cámara para escanear</p>
                 <p>Apunta al código QR del bus</p>
             </div>
             
             <!-- Para pruebas: Generar QR de prueba -->
             <div class="demo-section">
-                <h3>🧪 Modo Demo</h3>
+                <h3>Qr de prueba</h3>
                 <p>Escanea estos códigos QR de prueba:</p>
                 
    <div class="qr-codes-grid">
@@ -178,6 +186,10 @@
         </div>
     </div>
 
+    <footer class="main-footer">
+  <p>Nombres<strong>Cristian Pulido y Miguel Sotelo</strong> © 2025</p>
+  <p>Estudiante UPTC</p>
+</footer>
     <!-- Scripts -->
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://unpkg.com/leaflet-routing-machine@3.2.12/dist/leaflet-routing-machine.js"></script>
