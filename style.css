@@ -42,22 +42,76 @@ body {
 }
 
 /* Header */
-header {
+/*header {
     text-align: center;
-    color: var(--primary);
+    color: rgb(0, 0, 0);
     margin-bottom: 30px;
     padding: 20px 0;
+}*/
+
+
+
+ .main-header {
+      background-color: #000;
+      color: #FFD700;
+      padding: 40px 20px;
+      text-align: center;
+      position: relative;
+      overflow: hidden;
+      border-bottom: 3px solid #FFD700;
+      margin-bottom: 60px; /* separa el header del contenido siguiente */
+    }
+
+    .main-header h1 {
+      font-size: 3rem; /* más grande */
+      margin-bottom: 10px;
+      font-weight: bold;
+    }
+
+    .main-header p {
+      font-size: 1.5rem;
+      color: #fff;
+    }
+
+    /* Animación del bus */
+    .bus-animation {
+      position: absolute;
+      top: 15px;
+      left: 0;
+      width: 100%;
+      height: 50px;
+      overflow: hidden;
+    }
+
+    .bus {
+      position: absolute;
+      left: -60px;
+      top: 0;
+      font-size: 2.5rem;
+      animation: moveBus 20s linear infinite;
+    }
+
+    @keyframes moveBus {
+      0% {
+        transform: translateX(-100px);
+      }
+      100% {
+        transform: translateX(110vw);
+      }
+    }
+/* === FOOTER === */
+.main-footer {
+  background-color: #111;
+  color: #ddd;
+  text-align: center;
+  padding: 15px 10px;
+  font-size: 0.9rem;
+  border-top: 2px solid #FFD700;
+  margin-top: 30px;
 }
 
-header h1 {
-    font-size: 2.2em;
-    margin-bottom: 8px;
-    font-weight: 700;
-}
-
-header p {
-    color: var(--text-light);
-    font-size: 1em;
+.main-footer strong {
+  color: #fff;
 }
 
 /* Balance Card */
@@ -572,4 +626,8 @@ header p {
     .balance-card h2 {
         font-size: 2em;
     }
+
+    /* === HEADER ANIMADO === */
+
+
 }
